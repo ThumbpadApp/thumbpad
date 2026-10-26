@@ -1,0 +1,164 @@
+# Fabrique Thumbpad depuis le code prive (ThumbpadApp/thumbpad-src), ici parce que les minutes Actions
+# d'un depot public sont gratuites. Secret THUMBPAD_SRC_TOKEN : jeton en lecture seule sur thumbpad-src.
+# Actions > Build > Run workflow (ref = branche de thumbpad-src). Resultat : branche "binaires" de ce depot.
+name: Build
+on:
+  workflow_dispatch:
+    inputs:
+      ref: { description: "Branche de thumbpad-src a fabriquer", default: main }
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ThumbpadApp/thumbpad-src
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.THUMBPAD_SRC_TOKEN }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Inno Setup (installeur)
+        shell: pwsh
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - run: .\build_windows.cmd
+        shell: cmd
+      - name: Test installation lambda puis desinstallation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force rapport | Out-Null
+          Start-Transcript rapport/test-Windows.txt
+          "installeur : " + (Test-Path dist\Thumbpad-Setup.exe) + " " + (Get-Item dist\Thumbpad-Setup.exe).Length
+          Start-Process dist\Thumbpad-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          "--- mise a jour par-dessus un Thumbpad ouvert"
+          Start-Process "$env:LOCALAPPDATA\Programs\Thumbpad\Thumbpad.exe"
+          foreach ($i in 1..40) { Start-Sleep 2; try { Invoke-WebRequest http://127.0.0.1:8765/api/ping -UseBasicParsing | Out-Null; break } catch {} }
+          "Thumbpad ouvert avant : " + [bool](Get-Process Thumbpad -ErrorAction SilentlyContinue)
+          $p = Start-Process dist\Thumbpad-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=rapport\setup-maj.txt" -Wait -PassThru
+          "mise a jour, code de sortie : " + $p.ExitCode
+          "Thumbpad ferme par l'installeur : " + (-not [bool](Get-Process Thumbpad -ErrorAction SilentlyContinue))
+          "ecran applications ouvertes : " + [bool](Select-String -Quiet -Path rapport\setup-maj.txt -Pattern "RestartManager|applications are using files")
+          Start-Process "$env:LOCALAPPDATA\Programs\Thumbpad\Thumbpad.exe"
+          foreach ($i in 1..40) { Start-Sleep 2; try { (Invoke-WebRequest http://127.0.0.1:8765/api/ping -UseBasicParsing).Content; break } catch {} }
+          Start-Sleep 25
+          $inst = "$env:LOCALAPPDATA\Programs\Thumbpad\Thumbpad.exe"
+          "installe : " + (Test-Path $inst)
+          "demarrage (Run) : " + (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run -Name Thumbpad -ErrorAction SilentlyContinue).Thumbpad
+          "ancien raccourci Demarrage : " + (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Thumbpad.lnk")
+          "menu Demarrer : " + (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Thumbpad.lnk")
+          "Applications installees : " + (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thumbpad -ErrorAction SilentlyContinue).UninstallString
+          "liaison directe : " + (-not (Select-String -Quiet -Path "$env:APPDATA\Thumbpad\thumbpad.log" -Pattern "liaison directe indisponible"))
+          "version (fichier) : " + (Get-Item $inst).VersionInfo.ProductVersion
+          Start-Process $inst -ArgumentList "--uninstall" -Wait
+          Start-Sleep 6
+          "--- apres desinstallation"
+          "programme : " + (Test-Path $inst)
+          "reglages : " + (Test-Path "$env:APPDATA\Thumbpad")
+          "Run : " + [bool](Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run -Name Thumbpad -ErrorAction SilentlyContinue)
+          "menu Demarrer : " + (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Thumbpad.lnk")
+          "Applications installees : " + (Test-Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thumbpad)
+          try { Invoke-WebRequest http://127.0.0.1:8765/api/ping -UseBasicParsing -TimeoutSec 3 | Out-Null; "port : encore ouvert" } catch { "port : ferme" }
+          "--- dossier choisi dans l'installeur"
+          $dir = "$env:USERPROFILE\Mes Apps\Thumbpad"
+          Start-Process dist\Thumbpad-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=`"$dir`"" -Wait
+          "registre InstallDir : " + (Get-ItemProperty HKCU:\Software\Thumbpad -ErrorAction SilentlyContinue).InstallDir
+          Start-Process "$dir\Thumbpad.exe"
+          foreach ($i in 1..40) { Start-Sleep 2; try { Invoke-WebRequest http://127.0.0.1:8765/api/ping -UseBasicParsing | Out-Null; break } catch {} }
+          Start-Sleep 8
+          "copie dans le dossier choisi : " + (Test-Path "$dir\Thumbpad.exe")
+          "pas de copie dans le dossier par defaut : " + (-not (Test-Path $inst))
+          "processus lance depuis : " + (Get-Process Thumbpad -ErrorAction SilentlyContinue | Select-Object -First 1).Path
+          "Run : " + (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run -Name Thumbpad -ErrorAction SilentlyContinue).Thumbpad
+          Start-Process dist\Thumbpad-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          "mise a jour garde le dossier choisi : " + ((Test-Path "$dir\Thumbpad.exe") -and -not (Test-Path $inst))
+          Start-Process "$dir\Thumbpad.exe" -ArgumentList "--uninstall" -Wait
+          Start-Sleep 6
+          "apres desinstallation, programme : " + (Test-Path "$dir\Thumbpad.exe") + " / dossier : " + (Test-Path $dir) + " / registre : " + (Test-Path HKCU:\Software\Thumbpad)
+          Stop-Transcript
+      - name: Paquet Microsoft Store (MSIX), puis test d'installation avec une signature de test
+        shell: pwsh
+        run: |
+          python -m pip install --quiet pillow
+          python msix/assets.py
+          $v = (python version_info.py).Trim()
+          $parts = $v.Split('.'); while ($parts.Count -lt 3) { $parts += '0' }
+          $ver = ($parts[0..2] -join '.') + '.0'
+          New-Item -ItemType Directory -Force msixroot | Out-Null
+          Copy-Item dist\Thumbpad.exe msixroot\
+          Copy-Item -Recurse msix\Assets msixroot\Assets
+          (Get-Content msix\AppxManifest.xml -Raw) -replace 'Version="2\.3\.0\.0"', "Version=`"$ver`"" | Set-Content msixroot\AppxManifest.xml -Encoding utf8
+          $kit = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64\makeappx.exe" | Sort-Object FullName | Select-Object -Last 1).DirectoryName
+          & "$kit\makepri.exe" createconfig /cf priconfig.xml /dq fr-FR /o
+          & "$kit\makepri.exe" new /pr msixroot /cf priconfig.xml /of msixroot\resources.pri /o
+          & "$kit\makeappx.exe" pack /d msixroot /p dist\Thumbpad.msix /o
+          if (-not (Test-Path dist\Thumbpad.msix)) { throw "msix absent" }
+          "--- version Store $ver : signature de test, installation, lancement" | Tee-Object -Append rapport/test-Windows.txt
+          $pub = ([xml](Get-Content msixroot\AppxManifest.xml)).Package.Identity.Publisher
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $pub -KeyUsage DigitalSignature -CertStoreLocation Cert:\CurrentUser\My -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
+          Copy-Item dist\Thumbpad.msix test.msix
+          & "$kit\signtool.exe" sign /fd SHA256 /sha1 $cert.Thumbprint test.msix
+          Export-Certificate -Cert $cert -FilePath test.cer | Out-Null
+          Import-Certificate -FilePath test.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+          Add-AppxPackage test.msix
+          $pkg = Get-AppxPackage Thumbpad.Thumbpad-PhoneRemote
+          ("paquet installe : " + $pkg.PackageFullName) | Tee-Object -Append rapport/test-Windows.txt
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!Thumbpad"
+          $ok = $false; foreach ($i in 1..40) { Start-Sleep 2; try { $r = (Invoke-WebRequest http://127.0.0.1:8765/api/ping -UseBasicParsing).Content; $ok = $true; break } catch {} }
+          ("version Store lancee : " + $ok + " " + $r) | Tee-Object -Append rapport/test-Windows.txt
+          Get-Process Thumbpad -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep 2
+          Remove-AppxPackage $pkg.PackageFullName
+          ("desinstallee : " + (-not [bool](Get-AppxPackage Thumbpad.Thumbpad-PhoneRemote))) | Tee-Object -Append rapport/test-Windows.txt
+          if (-not $ok) { throw "la version Store ne demarre pas" }
+      - uses: actions/upload-artifact@v4
+        with: { retention-days: 3, name: Thumbpad-Windows, path: "dist/Thumbpad.exe\ndist/Thumbpad-Setup.exe\ndist/Thumbpad.msix\nrapport/test-Windows.txt" }
+
+  mac:
+    # Deux versions : Apple Silicon (M1 a M4) et anciens Mac Intel
+    strategy:
+      matrix:
+        include:
+          - { os: macos-15, arch: AppleSilicon }
+          - { os: macos-15-intel, arch: Intel }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ThumbpadApp/thumbpad-src
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.THUMBPAD_SRC_TOKEN }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sh build_mac.sh
+      - name: Test de demarrage (ping local + relais)
+        run: |
+          exec > >(tee "dist/test-${{ matrix.arch }}.txt") 2>&1
+          file dist/Thumbpad.app/Contents/MacOS/Thumbpad
+          PYTHONPATH=avstub python3 -c "import aiortc, av; print('aiortc', aiortc.__version__, 'av', av.__version__)" || true
+          python3 -c "import input_mac as m; [m.combo([k]) for k in ('volume_up', 'volume_down', 'playpause', 'playpause', 'next', 'prev')]; print('touches multimedia : ok')"
+          dist/Thumbpad.app/Contents/MacOS/Thumbpad > run.txt 2>&1 &
+          for i in $(seq 1 30); do sleep 2; curl -fsS http://127.0.0.1:8765/api/ping && break; done
+          sleep 10
+          echo "--- log"; cat "$HOME/Library/Application Support/Thumbpad/thumbpad.log" || true
+          echo "--- stdout"; cat run.txt || true
+          curl -fsS http://127.0.0.1:8765/api/ping
+          pkill -f Thumbpad.app || true
+        shell: bash
+      - run: mv dist/Thumbpad.dmg "dist/Thumbpad-Mac-${{ matrix.arch }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with: { retention-days: 3, name: "Thumbpad-Mac-${{ matrix.arch }}", path: "dist/Thumbpad-Mac-${{ matrix.arch }}.dmg\ndist/test-${{ matrix.arch }}.txt" }
+
+  # Range les fichiers fabriques dans la branche "binaires" (recuperable par git, sans passer par les artefacts)
+  binaires:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - run: |
+          cd out && ls -la
+          git init -q -b binaires && git add -A
+          git -c user.name=thumbpad-build -c user.email=build@users.noreply.github.com commit -qm "Build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" binaires
