@@ -1,0 +1,12 @@
+dist/Thumbpad.app/Contents/MacOS/Thumbpad: Mach-O 64-bit executable arm64
+aiortc 1.14.0 av 0+thumbpad
+touches multimedia : ok
+{"name": "iad20-eo1210-722435f6-7989-4f4a-b487-9675def8c341-7A93DD15A378", "ok": true, "app": "Thumbpad", "version": "2.3.1", "peers": []}--- log
+2026-10-31 15:01:13 lancement /Users/runner/work/thumbpad/thumbpad/dist/Thumbpad.app/Contents/MacOS/Thumbpad 
+2026-10-31 15:01:17 Thumbpad 2.3.1 demarre sur le port 8765 (iad20-eo1210-722435f6-7989-4f4a-b487-9675def8c341-7A93DD15A378)
+2026-10-31 15:01:18 vraie souris prioritaire : oui ; raccourci Ctrl+Option+X : oui
+2026-10-31 15:01:18 page du telephone https://thumbpad.app/ : en ligne
+2026-10-31 15:01:19 relais connecte : broker.emqx.io
+2026-10-31 15:01:23 relais connecte : broker.hivemq.com
+--- stdout
+{"name": "iad20-eo1210-722435f6-7989-4f4a-b487-9675def8c341-7A93DD15A378", "ok": true, "app": "Thumbpad", "version": "2.3.1", "peers": []}

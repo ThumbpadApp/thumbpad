@@ -1,0 +1,14 @@
+dist/Thumbpad.app/Contents/MacOS/Thumbpad: Mach-O 64-bit executable x86_64
+aiortc 1.14.0 av 0+thumbpad
+touches multimedia : ok
+curl: (28) Failed to connect to 127.0.0.1:8765 after 75001 ms: Could not connect to server
+{"name": "sjc20-cw761-6d0d26a6-3d50-44fa-a8a4-2a5dfa4aeb15-1EE914EF1886", "ok": true, "app": "Thumbpad", "version": "2.3.1", "peers": []}--- log
+2026-10-31 15:05:18 lancement /Users/runner/work/thumbpad/thumbpad/dist/Thumbpad.app/Contents/MacOS/Thumbpad 
+2026-10-31 15:06:28 liaison directe indisponible (paquet aiortc absent : ModuleNotFoundError("No module named 'aiortc'")) : relais seulement
+2026-10-31 15:06:29 Thumbpad 2.3.1 demarre sur le port 8765 (sjc20-cw761-6d0d26a6-3d50-44fa-a8a4-2a5dfa4aeb15-1EE914EF1886)
+2026-10-31 15:06:30 vraie souris prioritaire : oui ; raccourci Ctrl+Option+X : oui
+2026-10-31 15:06:31 page du telephone https://thumbpad.app/ : en ligne
+2026-10-31 15:06:31 relais connecte : broker.hivemq.com
+2026-10-31 15:06:31 relais connecte : broker.emqx.io
+--- stdout
+{"name": "sjc20-cw761-6d0d26a6-3d50-44fa-a8a4-2a5dfa4aeb15-1EE914EF1886", "ok": true, "app": "Thumbpad", "version": "2.3.1", "peers": []}
